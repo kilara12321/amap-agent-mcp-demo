@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>高德 MCP 地图助手</title>
+  <style>
+    :root { font-family: system-ui, "Microsoft YaHei", sans-serif; color: #18263b; background: #eef4f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 32px 18px; }
+    .app { width: min(100%, 920px); height: calc(100vh - 64px); min-height: 420px; margin: auto; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dce6ed; border-radius: 24px; background: #fff; box-shadow: 0 24px 70px #193b5c14; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 26px 30px 22px; border-bottom: 1px solid #e8eef2; background: linear-gradient(120deg, #f8fcff, #fff 65%); }
+    .eyebrow { margin: 0 0 5px; color: #137c91; font-size: .76rem; font-weight: 800; letter-spacing: .12em; }
+    h1 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.75rem); letter-spacing: -.03em; }
+    .subtitle { margin: 8px 0 0; color: #62748a; font-size: .9rem; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .status { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: #1a704f; font-size: .82rem; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #21b779; box-shadow: 0 0 0 4px #21b77922; }
+    .status.error { color: #ad3b3b; }
+    .status.error::before { background: #e25d5d; box-shadow: 0 0 0 4px #e25d5d22; }
+    button { font: inherit; cursor: pointer; }
+    .reset { padding: 8px 12px; border: 1px solid #d5e2e9; border-radius: 10px; background: #fff; color: #50677a; font-size: .82rem; }
+    .reset:hover { background: #f3f7f9; }
+    button:disabled { cursor: wait; opacity: .65; }
+    #chat { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 30px; background: radial-gradient(circle at 50% 0, #f4faff, #fff 55%); }
+    .empty { max-width: 520px; margin: 16px auto 0; text-align: center; }
+    .empty-icon { display: grid; place-items: center; width: 54px; height: 54px; margin: auto; border-radius: 18px; background: #e4f3f4; color: #0b7887; font-size: 1.5rem; }
+    .empty h2 { margin: 18px 0 8px; font-size: 1.25rem; }
+    .empty p { margin: 0; color: #728297; line-height: 1.7; }
+    .message { max-width: 84%; margin: 0 0 20px; padding: 14px 18px; border-radius: 17px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 5px 20px #28425b0a; }
+    .message.user { margin-left: auto; border-bottom-right-radius: 5px; background: #dcecff; color: #143f72; }
+    .message.assistant { margin-right: auto; border: 1px solid #e5ecf1; border-bottom-left-radius: 5px; background: #fff; }
+    .message.error { color: #a62d3b; border-color: #f2cdd2; background: #fff7f8; }
+    details { max-width: 84%; margin: -10px 0 22px; padding: 10px 14px; border-radius: 12px; background: #f2f6f8; color: #50677a; font-size: .83rem; }
+    summary { cursor: pointer; font-weight: 600; }
+    details pre { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
+    .composer { padding: 18px 30px 24px; border-top: 1px solid #e8eef2; background: #fff; }
+    form { display: flex; align-items: center; gap: 10px; padding: 7px; border: 1px solid #cedde6; border-radius: 16px; box-shadow: 0 4px 16px #264d700d; }
+    form:focus-within { border-color: #418db5; box-shadow: 0 0 0 3px #418db522; }
+    input { flex: 1; min-width: 0; padding: 10px 11px; border: 0; outline: 0; color: #18263b; font: inherit; }
+    input::placeholder { color: #8b99a8; }
+    .send { min-width: 86px; padding: 11px 16px; border: 0; border-radius: 11px; background: #12679a; color: #fff; font-weight: 700; }
+    .send:hover:not(:disabled) { background: #0d527d; }
+    .note { margin: 10px 4px 0; color: #8a98a8; font-size: .75rem; text-align: center; }
+    @media (max-width: 600px) {
+      body { padding: 0; }
+      .app { height: 100dvh; min-height: 420px; border: 0; border-radius: 0; }
+      .header { align-items: flex-start; flex-direction: column; padding: 20px; }
+      .header-actions { justify-content: flex-start; }
+      #chat { padding: 22px 16px; }
+      .message, details { max-width: 92%; }
+      .composer { padding: 12px 14px 18px; }
+      .send { min-width: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <p class="eyebrow">高德地图 · MCP 助手</p>
+        <h1>高德 MCP 地图助手</h1>
+        <p class="subtitle">查地点、看路线、问天气，接着追问也可以。</p>
+      </div>
+      <div class="header-actions">
+        <span id="connection-status" class="status">正在连接</span>
+        <button id="reset" class="reset" type="button">清空对话</button>
+      </div>
+    </header>
+    <main id="chat" aria-live="polite">
+      <div id="empty" class="empty">
+        <div class="empty-icon" aria-hidden="true">⌖</div>
+        <h2>想去哪里，想了解什么？</h2>
+        <p>例如：北京大学东门附近有哪些咖啡店？<br>你也可以在回答后继续追问。</p>
+      </div>
+    </main>
+    <div class="composer">
+      <form id="chat-form">
+        <input id="question" name="question" aria-label="地图问题" placeholder="输入地图问题，或继续追问…" maxlength="2000" autocomplete="off" required>
+        <button id="send" class="send" type="submit">发送</button>
+      </form>
+      <p class="note">对话保存在本机服务的内存中；重启服务后会清空。</p>
+    </div>
+  </div>
+  <script>
+    const form = document.querySelector("#chat-form");
+    const input = document.querySelector("#question");
+    const button = document.querySelector("#send");
+    const reset = document.querySelector("#reset");
+    const chat = document.querySelector("#chat");
+    const empty = document.querySelector("#empty");
+    const status = document.querySelector("#connection-status");
+
+    function setStatus(message, isError = false) {
+      status.textContent = message;
+      status.classList.toggle("error", isError);
+    }
+
+    function addMessage(text, kind) {
+      empty.hidden = true;
+      const item = document.createElement("div");
+      item.className = `message ${kind}`;
+      item.textContent = text;
+      chat.append(item);
+      chat.scrollTop = chat.scrollHeight;
+      return item;
+    }
+
+    async function loadHistory() {
+      button.disabled = true;
+      reset.disabled = true;
+      let connected = false;
+      try {
+        const response = await fetch("/api/history", { cache: "no-store" });
+        if (!response.ok) throw new Error("连接失败");
+        const data = await response.json();
+        for (const message of data.messages) addMessage(message.content, message.role);
+        setStatus("本机后端已连接");
+        connected = true;
+      } catch {
+        setStatus("请启动或重启本机后端", true);
+      } finally {
+        button.disabled = !connected;
+        reset.disabled = !connected;
+      }
+    }
+
+    if (location.protocol === "file:") {
+      setStatus("请从本机服务打开页面", true);
+      button.disabled = true;
+      reset.disabled = true;
+    } else {
+      loadHistory();
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (location.protocol === "file:") return;
+      const question = input.value.trim();
+      if (!question) return;
+      addMessage(question, "user");
+      input.value = "";
+      button.disabled = true;
+      reset.disabled = true;
+      const waiting = addMessage("正在查询，请稍候…", "assistant");
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "请求失败，请稍后重试。");
+        waiting.textContent = data.answer;
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "查看调用过程";
+        details.append(summary);
+        for (const item of data.events) {
+          const line = document.createElement("pre");
+          line.textContent = `${item.stage}：${item.message}`;
+          details.append(line);
+        }
+        chat.append(details);
+        chat.scrollTop = chat.scrollHeight;
+        setStatus("本机后端已连接");
+      } catch (error) {
+        waiting.classList.add("error");
+        waiting.textContent = error instanceof TypeError
+          ? "连接不到本机后端。请启动 python web_app.py 后刷新页面。"
+          : `出错了：${error.message}`;
+        if (error instanceof TypeError) setStatus("本机后端未连接", true);
+      } finally {
+        button.disabled = false;
+        reset.disabled = false;
+        input.focus();
+      }
+    });
+
+    reset.addEventListener("click", async () => {
+      reset.disabled = true;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/reset", { method: "POST" });
+        if (!response.ok) throw new Error("清空失败，请重试。");
+        chat.replaceChildren(empty);
+        empty.hidden = false;
+        setStatus("本机后端已连接");
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        reset.disabled = false;
+        button.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>
